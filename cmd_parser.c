@@ -20,6 +20,7 @@
 #include <rte_ether.h>
 
 #include "parser.h"
+#include "ip.h"
 
 #define LEN 16 // Length for holding IP address.
 
@@ -132,6 +133,7 @@ struct configuration *parse_args(int argc, char **argv) {
             }
             strncpy(ip_string_format, self_ip, strlen(self_ip));
             inet_aton(ip_string_format, config.self_ipaddr.sin_addr);
+            ipv4_addr_dump("\n Configuration -i=\n", config.self_ipaddr.sin_addr.s_addr);
             break;
         case 's':
             retval = parse_ip_address(optarg, &remote_ip);
@@ -140,6 +142,7 @@ struct configuration *parse_args(int argc, char **argv) {
             }
             strncpy(ip_string_format, remote_ip, strlen(remote_ip));
             inet_aton(ip_string_format, config.remote_ipaddr.sin_addr);
+            ipv4_addr_dump("\n Configuration -s=\n", config.remote_ipaddr.sin_addr.s_addr);
             break;
         /* long options */
         case 0:

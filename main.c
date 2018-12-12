@@ -301,6 +301,10 @@ main(int argc, char *argv[])
     /* initialize port stats */
     memset(&port_stats, 0, sizeof(port_stats));
 
+    port.port_id = 0;
+    port.ipaddr = conf->self_ipaddr;
+    port.queue_id = 0;
+
     /* Call lcore_main on the master core only. */
     rte_eal_remote_launch(lcore_main, &port, lcore_id);
 
