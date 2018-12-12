@@ -166,4 +166,4 @@ dep_ip.o = /opt/ve_vnf/ip.c /usr/include/stdc-predef.h \
  /opt/dpdk/x86_64-native-linuxapp-gcc/include/rte_dev_info.h \
  /opt/dpdk/x86_64-native-linuxapp-gcc/include/rte_ip.h \
  /opt/dpdk/x86_64-native-linuxapp-gcc/include/rte_ether.h \
- /opt/ve_vnf/ip.h
+ /opt/ve_vnf/ip.h /opt/ve_vnf/icmp.h /opt/ve_vnf/utils.h

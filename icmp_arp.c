@@ -16,6 +16,7 @@
 #include <rte_arp.h>
 #include <rte_icmp.h>
 #include <rte_udp.h>
+#include <rte_mbuf.h>
 
 #include "icmp.h"
 #include "ip.h"
@@ -23,7 +24,7 @@
 
 /* generate an echo message from an ipv4 packet.
  * ipv4 header field will not be changed */
-void icmp_echo_reply(struct port_conf *port, struct rte_mbuf *mbuf)
+void process_icmp_echo(struct port_conf *port, struct rte_mbuf *mbuf)
 {
     struct ipv4_hdr *ip_hdr;
     struct icmp_hdr *icmp_hd;

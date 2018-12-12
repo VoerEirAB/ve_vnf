@@ -16,6 +16,7 @@
 #include <rte_ether.h>
 
 #include "ip.h"
+#include "icmp.h"
 
 #define LEN 16 // Length for holding IP address.
 #define DOT "."
@@ -30,8 +31,7 @@ ipv4_addr_to_dot(uint32_t be_ipv4_addr, char *buf)
         ipv4_addr & 0xFF);
 }
 
-static void
-ipv4_addr_dump(const char *what, uint32_t be_ipv4_addr)
+void ipv4_addr_dump(const char *what, uint32_t be_ipv4_addr)
 {
     char buf[16];
     ipv4_addr_to_dot(be_ipv4_addr, buf);
@@ -40,8 +40,7 @@ ipv4_addr_dump(const char *what, uint32_t be_ipv4_addr)
     printf("%s", buf);
 }
 
-static void
-ether_addr_dump(const char *what, const struct ether_addr *ea)
+void ether_addr_dump(const char *what, const struct ether_addr *ea)
 {
     char buf[ETHER_ADDR_FMT_SIZE];
 
@@ -51,8 +50,7 @@ ether_addr_dump(const char *what, const struct ether_addr *ea)
     printf("%s", buf);
 }
 
-static uint16_t
-ipv4_hdr_cksum(struct ipv4_hdr *ip_h)
+uint16_t ipv4_hdr_cksum(struct ipv4_hdr *ip_h)
 {
     uint16_t *v16_h;
     uint32_t ip_cksum;

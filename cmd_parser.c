@@ -11,6 +11,7 @@
 #include <stdarg.h>
 #include <errno.h>
 #include <getopt.h>
+#include <netinet/in.h>
 
 #include <rte_ethdev.h>
 #include <signal.h>
