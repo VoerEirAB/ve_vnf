@@ -193,7 +193,7 @@ static inline int port_init(struct port_conf *port) {
 
     /* Display the port MAC address. */
     rte_eth_macaddr_get(port->port_id, &(port->eth_addr));
-    printf("Port %u MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
+    printf("\n\rPort %u MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
                " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
             (unsigned)port->port_id,
             port->eth_addr.addr_bytes[0], port->eth_addr.addr_bytes[1],

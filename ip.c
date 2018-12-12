@@ -31,13 +31,15 @@ ipv4_addr_to_dot(uint32_t be_ipv4_addr, char *buf)
         ipv4_addr & 0xFF);
 }
 
-void ipv4_addr_dump(const char *what, uint32_t be_ipv4_addr)
+void ipv4_addr_dump(FILE *f, const char *what, uint32_t be_ipv4_addr)
 {
     char buf[16];
     ipv4_addr_to_dot(be_ipv4_addr, buf);
+    if (! f)
+       f = stdout;
     if (what)
-        printf("%s", what);
-    printf("%s", buf);
+        fprintf(f, "%s", what);
+    fprintf(f, "%s", buf);
 }
 
 void ether_addr_dump(const char *what, const struct ether_addr *ea)

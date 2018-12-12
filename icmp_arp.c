@@ -112,11 +112,11 @@ void process_arp(struct port_conf *port, struct rte_mbuf *mb)
 
     // Do not do anything if ARP is not requested.
     if (arp_op != ARP_OP_REQUEST) {
-        rte_pktmbuf_free(mb);
+        //rte_pktmbuf_free(mb);
         return;
     }
 
-    ipv4_addr_dump("\nARP Requested from ip=", arp_h->arp_data.arp_sip);
+    ipv4_addr_dump(stdout, "\nARP Requested from ip=", arp_h->arp_data.arp_sip);
     fflush(stdout);
 
     /* Use source MAC address as destination MAC address. */
