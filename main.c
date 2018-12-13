@@ -162,6 +162,7 @@ static inline int port_init(struct port_conf *port) {
 
     /* Get device info for defaults */
     rte_eth_dev_info_get(-port->port_id, &dev_info);
+    //dump_dev_info(&dev_info);
     /* Allocate and set up 1 RX queue per Ethernet port. */
     rxq_conf = dev_info.default_rxconf;
     rxq_conf.rx_free_thresh = 32;
@@ -190,6 +191,8 @@ static inline int port_init(struct port_conf *port) {
     retval = rte_eth_dev_start(port->port_id);
     if (retval < 0)
         return retval;
+    rte_eth_dev_info_get(-port->port_id, &dev_info);
+    dump_dev_info(&dev_info);
 
     /* Display the port MAC address. */
     rte_eth_macaddr_get(port->port_id, &(port->eth_addr));
