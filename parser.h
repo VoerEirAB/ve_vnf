@@ -23,6 +23,7 @@ struct configuration {
    uint64_t extra_timer_period; /* default extra time period of 5 sec */
    struct sockaddr_in self_ipaddr; /* Self IP address. */
    struct sockaddr_in remote_ipaddr; /* Remote IP address. */
+   uint8_t iteration_no;
 };
 
 static const char short_options[] =
@@ -33,6 +34,7 @@ static const char short_options[] =
     "p:"  /* packet size */
     "j:" /* another ip */
     "e:" /* extra time defaults to 10 */
+    "n" /* iteration number*/
     ;
 
 #endif

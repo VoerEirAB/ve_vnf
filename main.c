@@ -297,6 +297,9 @@ main(int argc, char *argv[])
 
     /* initialize port stats */
     memset(&port, 0, sizeof(port));
+    port.port_id = 0;
+    port.queue_id = 0;
+    port.ipaddr = conf->self_ipaddr;
 
     /* initialize port stats */
     memset(&port_stats, 0, sizeof(port_stats));

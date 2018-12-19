@@ -131,7 +131,9 @@ struct configuration *parse_args(int argc, char **argv) {
                 rte_exit(EXIT_FAILURE,"invalid self IP Address\n");
             }
             strncpy(ip_string_format, self_ip, strlen(self_ip));
-            inet_aton(ip_string_format, config.self_ipaddr.sin_addr);
+            inet_aton(ip_string_format, &config.self_ipaddr.sin_addr);
+            ipv4_addr_dump("Self Ip: ",config.self_ipaddr.sin_addr);
+            printf("\n\r");
             break;
         case 's':
             retval = parse_ip_address(optarg, &remote_ip);
@@ -139,10 +141,13 @@ struct configuration *parse_args(int argc, char **argv) {
                 rte_exit(EXIT_FAILURE,"invalid remote IP Address\n");
             }
             strncpy(ip_string_format, remote_ip, strlen(remote_ip));
-            inet_aton(ip_string_format, config.remote_ipaddr.sin_addr);
+            inet_aton(ip_string_format, &config.remote_ipaddr.sin_addr);
+            ipv4_addr_dump("Remote Ip: ",config.remote_ipaddr.sin_addr);
+            printf("\n\r");
             break;
         /* long options */
-        case 0:
+        case 'n':
+            config.iteration_no = optarg;
             break;
 
         default:
