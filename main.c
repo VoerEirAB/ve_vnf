@@ -342,7 +342,7 @@ main(int argc, char *argv[])
                "\"UDP[7]\" : %u,\n"
                "\"UDP[8]\" : %u,\n"
                "\"UDP[9]\" : %u,\n"
-               "\"UDP[10]\" : %u,\n"
+               "\"UDP[10]\" : %u\n"
                "}\n",
                port_stats.ipv4,
                port_stats.udp,
