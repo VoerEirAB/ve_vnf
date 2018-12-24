@@ -24,8 +24,8 @@ struct configuration {
    uint64_t warm_up_time_period; /* default warmup time period of 0 sec */
    struct sockaddr_in self_ipaddr; /* Self IP address. */
    struct sockaddr_in remote_ipaddr; /* Remote IP address. */
-   uint8_t iteration_no; /* default iteration number is 1 */
-   uint8_t iterations; /* default iterations are 20 */
+   uint64_t iteration_no; /* default iteration number is 1 */
+   uint64_t iterations; /* default iterations are 20 */
 };
 
 static const char short_options[] =
@@ -36,7 +36,8 @@ static const char short_options[] =
     "p:"  /* packet size */
     "j:" /* another ip */
     "e:" /* extra time defaults to 10 */
-    "n" /* iteration number*/
+    "n:" /* iteration number*/
+    "r:" /* number of iterations */
     ;
 
 #endif

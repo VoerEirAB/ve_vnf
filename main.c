@@ -72,7 +72,7 @@ struct port_statistics {
     uint64_t unknown;
     uint64_t udp[];
 } __rte_cache_aligned;
-struct port_statistics port_stats;
+struct port_statistics *port_stats;
 
 union payload_t {
         uint8_t  uint8[0];
@@ -103,16 +103,18 @@ static void pkt_classify(struct port_conf *port, struct configuration *config, s
 
     switch(rte_cpu_to_be_16(pType)) {
         case ETHER_TYPE_ARP:
-            port_stats.arp++;
+            port_stats->arp++;
             process_arp(port, m);
             break;
         case ETHER_TYPE_IPv4:
             ipv4_hdr = (struct ipv4_hdr *) &eth_hdr[1];
             if (ipv4_hdr->next_proto_id == IPPROTO_ICMP) {
+                printf("Got ICMP pkt");
+                fflush(stdout);
                 icmphdr = (struct icmp_hdr *) ((char *)ipv4_hdr + sizeof(struct ipv4_hdr));
                 if (icmphdr->icmp_type == IP_ICMP_ECHO_REQUEST &&
                     icmphdr->icmp_code == 0) {
-                   port_stats.icmp++;
+                   port_stats->icmp++;
                    process_icmp_echo(port, m);
                 }
                 break;
@@ -122,16 +124,16 @@ static void pkt_classify(struct port_conf *port, struct configuration *config, s
                     udp_h = (struct udp_hdr *) &ipv4_hdr[1];
                     payload = (union payload *) &udp_h[1];
                     iteration_no = payload->uint64[0];
-                    port_stats.udp[iteration_no]++;
-                    port_stats.rx++;
+                    port_stats->udp[iteration_no]++;
+                    port_stats->rx++;
                     break;
                  }
             }
-            port_stats.unknown++;     break;
+            port_stats->unknown++;     break;
         case ETHER_TYPE_IPv6:
-            port_stats.ipv6++;      break;
+            port_stats->ipv6++;      break;
         default:
-            port_stats.unknown++;     break;
+            port_stats->unknown++;     break;
     }
 }
 
@@ -300,10 +302,9 @@ main(int argc, char *argv[])
     port.ipaddr = conf->self_ipaddr;
 
     /* initialize port stats */
-    memset(&port_stats, 0, sizeof(port_stats) + ((conf->iterations + 1) * sizeof(uint64_t)));
-
-    for(int index=0; index <= conf->iterations; index++)
-        port_stats.udp[index] = 0;
+    uint8_t len = conf->iteration_no + conf->iterations + 1;
+    port_stats = malloc(sizeof(struct port_statistics) + sizeof(uint64_t) * len);
+    memset(port_stats, 0, sizeof(struct port_statistics) + sizeof(uint64_t) * len);
 
     /* Call lcore_main on the master core only. */
     rte_eal_remote_launch(lcore_main, &port, lcore_id);
@@ -327,35 +328,33 @@ main(int argc, char *argv[])
     }
 
     rte_eal_mp_wait_lcore();
-    result_size = sprintf(result,"\n{\"total_packets\": %u,"
-               "\"flows\": %u,\n"
+    result_size = sprintf(result,"\n{"
+               "\"flows\": 0,\n"
                "\"ARP_Packets\": %u,\n"
                "\"IPV4_received\": %u,\n"
                "\"ICMP Echo Request\": %u,\n"
                "\"Unknown packets\": %u,\n"
-               "\"payload\" : {,\n"
-               "}\n",
-               port_stats.ipv4,
-               port_stats.udp,
-               port_stats.arp,
-               port_stats.ipv4,
-               port_stats.icmp,
-               port_stats.unknown);
+               "\"payload\" : {\n",
+               port_stats->arp,
+               port_stats->ipv4,
+               port_stats->icmp,
+               port_stats->unknown);
 
     for(int index=0; index < conf->iterations; index++)
-        char buf[128];
-        result_size += sprintf(result,"\"%u\": %u,", index, port_stats.udp[index]);
+        result_size += sprintf(result + result_size,"\"%u\": %u,", index, port_stats->udp[index]);
 
-    result_size += sprintf(result,"\"%u\": %u }", conf->iterations, port_stats.udp[conf->iterations]);
-
+    result_size += sprintf(result+result_size,"\"%u\": %u }}", conf->iterations, port_stats->udp[conf->iterations]);
+ 
     printf("%s", result);
     fflush(stdout);
-    file_handler = fopen("rxStats.txt", "w");
+    free(port_stats);
+    file_handler = fopen("./rxStats.txt", "w");
     if (file_handler == NULL)
         rte_exit(EXIT_FAILURE, "%s: Open %s failed\n", __func__,
                  "rxStats.txt");
     fwrite(result, 1, result_size, file_handler);
-    fclose(file_handler);
+    fclose(file_handler); 
+    
     return 0;
 }
 
