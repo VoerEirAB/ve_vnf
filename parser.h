@@ -16,14 +16,16 @@ static int is_valid_ip_address(const char *ip);
 
 static int is_valid_digit(const char *c);
 
-static int parse_timer_period(const char *q_arg);
+static int parse_number(const char *q_arg);
 
 struct configuration {
    uint64_t timer_period; /* default period is 60 seconds */
-   uint64_t extra_timer_period; /* default extra time period of 5 sec */
+   uint64_t extra_timer_period; /* default extra time period of 10 sec */
+   uint64_t warm_up_time_period; /* default warmup time period of 0 sec */
    struct sockaddr_in self_ipaddr; /* Self IP address. */
    struct sockaddr_in remote_ipaddr; /* Remote IP address. */
-   uint8_t iteration_no;
+   uint8_t iteration_no; /* default iteration number is 1 */
+   uint8_t iterations; /* default iterations are 20 */
 };
 
 static const char short_options[] =

@@ -25,8 +25,14 @@
 
 char ip_string_format[LEN];
 struct configuration config;
+// Default values.
+config.iteration_no = 0;
+config.extra_timer_period = 10;
+config.warm_up_time_period = 2;
+config.iteration_no = 1;
+config.iterations = 20;
 
-static int parse_timer_period(const char *q_arg) {
+static int parse_number(const char *q_arg) {
     char *end = NULL;
     int n;
 
@@ -112,17 +118,21 @@ struct configuration *parse_args(int argc, char **argv) {
         switch (opt) {
         /* timer period */
         case 't':
-            config.timer_period = parse_timer_period(optarg);
+            config.timer_period = parse_number(optarg);
             if (config.timer_period < 0) {
-                rte_exit(EXIT_FAILURE, "invalid timer period\n");
+                rte_exit(EXIT_FAILURE, "invalid execution time period provided.\n");
             }
             break;
         case 'w':
+            config.warm_up_time_period = parse_number(optarg);
+            if (config.extra_timer_period < 0) {
+                rte_exit(EXIT_FAILURE,"invalid warmup time provided.\n");
+            }
             break;
         case 'e':
-            config.extra_timer_period = parse_timer_period(optarg);
+            config.extra_timer_period = parse_number(optarg);
             if (config.extra_timer_period < 0) {
-                rte_exit(EXIT_FAILURE,"invalid timer period\n");
+                rte_exit(EXIT_FAILURE,"invalid extra timer provided.\n");
             }
             break;
         case 'i':
@@ -147,9 +157,20 @@ struct configuration *parse_args(int argc, char **argv) {
             break;
         /* long options */
         case 'n':
-            config.iteration_no = optarg;
+            config.iteration_no = parse_number(optarg);
+            if (config.extra_timer_period < 0) {
+                rte_exit(EXIT_FAILURE,"invalid iteration number provided.\n");
+            }else if (config.extra_timer_period > config.iteration_no) {
+                rte_exit(EXIT_FAILURE,"current iteration number cannot be higher than iterations.\n");
+            }
             break;
-
+        /* long options */
+        case 'r':
+            config.iteration_no = parse_number(optarg);
+            if (config.extra_timer_period < 0) {
+                rte_exit(EXIT_FAILURE,"invalid iteration number provided.\n");
+            }
+            break;
         default:
             //usage(prgname);
             break;

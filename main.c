@@ -69,8 +69,8 @@ struct port_statistics {
     uint64_t ipv4;
     uint64_t icmp;
     uint64_t ipv6;
-    uint64_t udp[20];
     uint64_t unknown;
+    uint64_t udp[];
 } __rte_cache_aligned;
 struct port_statistics port_stats;
 
@@ -79,7 +79,7 @@ union payload_t {
         uint16_t uint16[0];
         uint32_t uint32[0];
         uint64_t uint64[0];
-    };
+}__rte_cache_aligned;
 
 /* Signal handler. */
 static void signal_handler(int signum) {
@@ -235,8 +235,6 @@ lcore_main(struct port_conf *port)
                 "not be optimal.\n", portid);
 
     printf("\nCore %u processing packets of port_id: %u\n", rte_lcore_id(), portid);
-    for(index=0; index < 20; index++)
-        port_stats.udp[index] = 0;
     /* Run until the application is quit or killed. */
     while (!force_quit) {
         /* Get burst of RX packets, from first port of pair. */
@@ -302,13 +300,16 @@ main(int argc, char *argv[])
     port.ipaddr = conf->self_ipaddr;
 
     /* initialize port stats */
-    memset(&port_stats, 0, sizeof(port_stats));
+    memset(&port_stats, 0, sizeof(port_stats) + ((conf->iterations + 1) * sizeof(uint64_t)));
+
+    for(int index=0; index <= conf->iterations; index++)
+        port_stats.udp[index] = 0;
 
     /* Call lcore_main on the master core only. */
     rte_eal_remote_launch(lcore_main, &port, lcore_id);
 
    /* convert to number of cycles */
-    timer_period = conf->timer_period + conf->extra_timer_period;
+    timer_period = conf->timer_period + conf->extra_timer_period + conf->warm_up_time_period;
     timer_period *= rte_get_timer_hz();
     prev_tsc = rte_rdtsc();
     while (!force_quit) {
@@ -332,35 +333,21 @@ main(int argc, char *argv[])
                "\"IPV4_received\": %u,\n"
                "\"ICMP Echo Request\": %u,\n"
                "\"Unknown packets\": %u,\n"
-               "\"UDP[0]\" : %u,\n"
-               "\"UDP[1]\" : %u,\n"
-               "\"UDP[2]\" : %u,\n"
-               "\"UDP[3]\" : %u,\n"
-               "\"UDP[4]\" : %u,\n"
-               "\"UDP[5]\" : %u,\n"
-               "\"UDP[6]\" : %u,\n"
-               "\"UDP[7]\" : %u,\n"
-               "\"UDP[8]\" : %u,\n"
-               "\"UDP[9]\" : %u,\n"
-               "\"UDP[10]\" : %u\n"
+               "\"payload\" : {,\n"
                "}\n",
                port_stats.ipv4,
                port_stats.udp,
                port_stats.arp,
                port_stats.ipv4,
                port_stats.icmp,
-               port_stats.unknown,
-               port_stats.udp[0],
-               port_stats.udp[1],
-               port_stats.udp[2],
-               port_stats.udp[3],
-               port_stats.udp[4],
-               port_stats.udp[5],
-               port_stats.udp[6],
-               port_stats.udp[7],
-               port_stats.udp[8],
-               port_stats.udp[9],
-               port_stats.udp[10]);
+               port_stats.unknown);
+
+    for(int index=0; index < conf->iterations; index++)
+        char buf[128];
+        result_size += sprintf(result,"\"%u\": %u,", index, port_stats.udp[index]);
+
+    result_size += sprintf(result,"\"%u\": %u }", conf->iterations, port_stats.udp[conf->iterations]);
+
     printf("%s", result);
     fflush(stdout);
     file_handler = fopen("rxStats.txt", "w");
