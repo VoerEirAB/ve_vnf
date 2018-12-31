@@ -64,7 +64,7 @@ static int is_valid_ip_address(const char *ip) {
     if (ip == NULL)
         return 0;
 
-    ptr = strtok(ip, DOT);
+    ptr = strtok((char *)ip, DOT);
     if (ptr == NULL)
         return 0;
 
