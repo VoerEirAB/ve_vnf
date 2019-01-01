@@ -122,7 +122,7 @@ static void pkt_classify(struct port_conf *port, struct configuration *config, s
             if (ipv4_hdr->src_addr == config->remote_ipaddr.sin_addr.s_addr) {
                 if (ipv4_hdr->next_proto_id == IPPROTO_UDP) {
                     udp_h = (struct udp_hdr *) &ipv4_hdr[1];
-                    payload = (union payload *) &udp_h[1];
+                    payload = (union payload_t *) &udp_h[1];
                     iteration_no = payload->uint64[0];
                     port_stats->udp[iteration_no]++;
                     port_stats->rx++;
@@ -212,11 +212,12 @@ static inline int port_init(struct port_conf *port) {
  * Core business logic of application.
  * Process incoming packets and handle accordingly.
  */
-static __attribute__((noreturn)) int
-lcore_main(struct port_conf *port)
+static int
+lcore_main(void *port_void_type)
 {
     const uint8_t nb_ports = rte_eth_dev_count();
     const uint16_t nb_tx = 0;
+    struct port_conf *port = (struct port_conf *)port_void_type;
     uint8_t portid = port->port_id;
     uint8_t index = 0;
     /* Initialize port. */
@@ -330,10 +331,10 @@ main(int argc, char *argv[])
     rte_eal_mp_wait_lcore();
     result_size = sprintf(result,"\n{"
                "\"flows\": 0,\n"
-               "\"ARP_Packets\": %u,\n"
-               "\"IPV4_received\": %u,\n"
-               "\"ICMP Echo Request\": %u,\n"
-               "\"Unknown packets\": %u,\n"
+               "\"ARP_Packets\": %" PRIu64 ",\n"
+               "\"IPV4_received\": %" PRIu64 ",\n"
+               "\"ICMP Echo Request\": %" PRIu64 ",\n"
+               "\"Unknown packets\": %" PRIu64 ",\n"
                "\"payload\" : {\n",
                port_stats->arp,
                port_stats->ipv4,
@@ -341,9 +342,9 @@ main(int argc, char *argv[])
                port_stats->unknown);
 
     for(int index=0; index < conf->iterations; index++)
-        result_size += sprintf(result + result_size,"\"%u\": %u,", index, port_stats->udp[index]);
+        result_size += sprintf(result + result_size,"\"%d\": %" PRIu64 ",", index, port_stats->udp[index]);
 
-    result_size += sprintf(result+result_size,"\"%u\": %u }}", conf->iterations, port_stats->udp[conf->iterations]);
+    result_size += sprintf(result+result_size,"\"%"PRIu64"\": %" PRIu64 " }}", conf->iterations, port_stats->udp[conf->iterations]);
  
     printf("%s", result);
     fflush(stdout);
