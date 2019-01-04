@@ -119,7 +119,6 @@ struct configuration *parse_args(int argc, char **argv) {
     //memset(&config, 0, sizeof(config));
 
     while ((opt = getopt(argc, argv, short_options)) != EOF) {
-
         switch (opt) {
         /* timer period */
         case 't':
@@ -145,6 +144,7 @@ struct configuration *parse_args(int argc, char **argv) {
             if (retval != 0) {
                 rte_exit(EXIT_FAILURE,"invalid self IP Address\n");
             }
+            memset(ip_string_format , 0, LEN); // Clear everytime before copying parsed IP.
             strncpy(ip_string_format, self_ip, strlen(self_ip));
             inet_aton(ip_string_format, &config.self_ipaddr.sin_addr);
             ipv4_addr_dump("Self Ip: ",config.self_ipaddr.sin_addr);
@@ -155,6 +155,7 @@ struct configuration *parse_args(int argc, char **argv) {
             if (retval != 0) {
                 rte_exit(EXIT_FAILURE,"invalid remote IP Address\n");
             }
+            memset(ip_string_format , 0, LEN); // Clear everytime before copying parsed IP.
             strncpy(ip_string_format, remote_ip, strlen(remote_ip));
             inet_aton(ip_string_format, &config.remote_ipaddr.sin_addr);
             ipv4_addr_dump("Remote Ip: ",config.remote_ipaddr.sin_addr);

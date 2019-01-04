@@ -109,8 +109,6 @@ static void pkt_classify(struct port_conf *port, struct configuration *config, s
         case ETHER_TYPE_IPv4:
             ipv4_hdr = (struct ipv4_hdr *) &eth_hdr[1];
             if (ipv4_hdr->next_proto_id == IPPROTO_ICMP) {
-                printf("Got ICMP pkt");
-                fflush(stdout);
                 icmphdr = (struct icmp_hdr *) ((char *)ipv4_hdr + sizeof(struct ipv4_hdr));
                 if (icmphdr->icmp_type == IP_ICMP_ECHO_REQUEST &&
                     icmphdr->icmp_code == 0) {
