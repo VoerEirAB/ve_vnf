@@ -44,10 +44,11 @@
 #include "ip.h"
 #include "parser.h"
 
-#define RX_RING_SIZE 8192
-#define TX_RING_SIZE 512
+#define RX_RING_SIZE 4096
+#define TX_RING_SIZE 1024
 #define BUF_SIZE 2048
-#define NUM_MBUFS 8191
+#define NUM_MBUFS 16384
+
 #define MBUF_CACHE_SIZE 512
 #define BURST_SIZE 64
 #define LEN 16 // Length for holding IP address.
