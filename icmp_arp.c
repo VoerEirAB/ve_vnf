@@ -94,20 +94,15 @@ void process_arp(struct port_conf *port, struct rte_mbuf *mb)
 {
     struct rte_mbuf  *mbuf_arr[1];
     struct ether_hdr *eth_hdr;
-    struct ipv4_hdr *ip_hdr;
     uint16_t arp_op;
     uint16_t arp_pro;
     struct arp_hdr  *arp_h;
     uint16_t queue_id = 0;
-    int l2_len;
     uint32_t ip_addr;
 
     eth_hdr = rte_pktmbuf_mtod(mb, struct ether_hdr *);
-    ip_hdr = (struct ipv4_hdr *) &eth_hdr[1];
-    //ip_hdr = rte_pktmbuf_mtod_offset(mb, struct ipv4_hdr *, sizeof(struct ether_hdr));
-    l2_len = sizeof(struct ether_hdr);
-
-    arp_h = (struct arp_hdr *) ((char *)eth_hdr + l2_len);
+    size_t vlan_offset = get_vlan_offset(eth_hdr);
+    arp_h = (struct arp_hdr *) ((char *)eth_hdr + vlan_offset);
     arp_op = rte_cpu_to_be_16(arp_h->arp_op);
 
     // Do not do anything if ARP is not requested.
@@ -123,7 +118,6 @@ void process_arp(struct port_conf *port, struct rte_mbuf *mb)
     ether_addr_copy(&eth_hdr->s_addr, &eth_hdr->d_addr);
     /* Set source MAC address with MAC address of TX port */
     ether_addr_copy(&port->eth_addr, &eth_hdr->s_addr);
-
     arp_h->arp_op = rte_cpu_to_be_16(ARP_OP_REPLY);
     ether_addr_copy(&arp_h->arp_data.arp_sha, &arp_h->arp_data.arp_tha);
     ether_addr_copy(&port->eth_addr, &arp_h->arp_data.arp_sha);
@@ -132,7 +126,6 @@ void process_arp(struct port_conf *port, struct rte_mbuf *mb)
     ip_addr = arp_h->arp_data.arp_tip;
     arp_h->arp_data.arp_tip = arp_h->arp_data.arp_sip;
     arp_h->arp_data.arp_sip = port->ipaddr.sin_addr.s_addr;
-
     mbuf_arr[0] = mb;
     rte_eth_tx_burst(port->port_id, port->queue_id, mbuf_arr, 1);
 }

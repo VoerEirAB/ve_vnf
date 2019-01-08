@@ -30,4 +30,24 @@ struct port_conf {
   struct sockaddr_in ipaddr;
 };
 
+static inline size_t get_vlan_offset(struct ether_hdr *eth_hdr)
+{
+        uint16_t ether_type;
+        size_t vlan_offset = sizeof(struct ether_hdr);
+        ether_type = eth_hdr->ether_type;
+        if (ether_type == rte_cpu_to_be_16(ETHER_TYPE_VLAN)) {
+                struct vlan_hdr *vlan_hdr = (struct vlan_hdr *)(eth_hdr + 1);
+                vlan_offset += sizeof(struct vlan_hdr);
+        }
+        return vlan_offset;
+}
+
+static inline void dump_mac_addr(struct ether_addr *eth_addr){
+	printf("MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
+               " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
+            eth_addr->addr_bytes[0], eth_addr->addr_bytes[1],
+            eth_addr->addr_bytes[2], eth_addr->addr_bytes[3],
+            eth_addr->addr_bytes[4], eth_addr->addr_bytes[5]);
+ 	fflush(stdout);
+}
 #endif

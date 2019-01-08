@@ -98,17 +98,24 @@ static void pkt_classify(struct port_conf *port, struct configuration *config, s
     struct icmp_hdr *icmphdr;
     union payload_t *payload;
 
-    //uint32_t offset = 0; // VLAN offset. 0 in VM.
+    uint32_t vlan_offset = sizeof(struct ether_hdr); // VLAN offset. 0 in VM with virtual port.
     eth_hdr = rte_pktmbuf_mtod(m, struct ether_hdr *);
-    pType = eth_hdr->ether_type;
+    pType = rte_cpu_to_be_16(eth_hdr->ether_type);
+    
+    // Check if its RIOV-SRIOV comunication where sender has tagged it with VLanID.
+    if (pType == ETHER_TYPE_VLAN) {
+          struct vlan_hdr *vlan_hdr = (struct vlan_hdr *)(eth_hdr + 1);
+          vlan_offset += sizeof(struct vlan_hdr);
+          pType = rte_be_to_cpu_16(vlan_hdr->eth_proto);
+    }
 
-    switch(rte_cpu_to_be_16(pType)) {
+    switch(pType) {
         case ETHER_TYPE_ARP:
             port_stats->arp++;
             process_arp(port, m);
             break;
         case ETHER_TYPE_IPv4:
-            ipv4_hdr = (struct ipv4_hdr *) &eth_hdr[1];
+            ipv4_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + vlan_offset);
             if (ipv4_hdr->next_proto_id == IPPROTO_ICMP) {
                 icmphdr = (struct icmp_hdr *) ((char *)ipv4_hdr + sizeof(struct ipv4_hdr));
                 if (icmphdr->icmp_type == IP_ICMP_ECHO_REQUEST &&
@@ -127,13 +134,17 @@ static void pkt_classify(struct port_conf *port, struct configuration *config, s
                     port_stats->rx++;
                     break;
                  }
+               printf("\nwrong proto\n");
             }
+            ipv4_addr_dump("\nSource IP: ", ipv4_hdr->src_addr);
             port_stats->unknown++;     break;
         case ETHER_TYPE_IPv6:
             port_stats->ipv6++;      break;
         default:
+            printf("strange type %d", pType);
             port_stats->unknown++;     break;
     }
+    fflush(stdout);
 }
 
 /* Initialize DPDK port. */
