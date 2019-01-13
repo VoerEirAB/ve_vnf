@@ -1,4 +1,3 @@
-
 /**
 * Copyright (c) 2018-present VoerEir AB - All Rights Reserved.
 * Unauthorized copying of this file, via any medium is strictly prohibited
@@ -16,7 +15,7 @@ static const struct rte_eth_conf eth_conf = {
         .hw_vlan_filter = 0, /**< VLAN filtering disabled */
         .jumbo_frame    = 0, /**< Jumbo Frame Support disabled */
         .hw_strip_crc   = 1, /**< CRC stripped by hardware */
-	.hw_vlan_strip =  1, /** Always stip Vlan so no need to handle it**/
+	.hw_vlan_strip =  1, /** Always strip Vlan so no need to handle it**/
         .max_rx_pkt_len = ETHER_MAX_LEN,
     },
     .txmode = {
