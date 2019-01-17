@@ -27,7 +27,8 @@ struct port_conf {
   uint8_t port_id;
   uint8_t queue_id;
   struct ether_addr eth_addr;
-  struct sockaddr_in ipaddr;
+  uint32_t ipaddr;
+  uint8_t ipaddr6[16];
 };
 
 #endif
