@@ -22,6 +22,30 @@
 #include "ip.h"
 #include "utils.h"
 
+uint16_t icmp6_cksum(struct icmp_hdr * icmp_hd, struct ipv6_hdr * ip6_hd)
+{
+    uint32_t icmp_cksum;
+    icmp_cksum = ipv6_pseudohdr_sum(ip6_hd);
+    icmp_cksum += (icmp_hd->icmp_type << 8) + icmp_hd->icmp_code;
+    if(icmp_hd->icmp_type == NDP_NEIGHBOUR_SOLICITATION || icmp_hd->icmp_type == NDP_NEIGHBOUR_ADVERTISEMENT) {
+        struct ndp_hdr * ndp_hd;
+        ndp_hd = (struct ndp_hdr *) icmp_hd;
+        icmp_cksum += (ndp_hd->reserved[0] << 8) + ndp_hd->reserved[1];
+        icmp_cksum += (ndp_hd->reserved[2] << 8) + ndp_hd->reserved[3];
+
+        for(int i=IPV6_ADDR_LEN - 1; i>0; i-= 2) {
+            icmp_cksum += (ndp_hd->address[i-1] << 8) + ndp_hd->address[i];
+        }
+    }
+
+    /* reduce 32 bit checksum to 16 bits and complement it */
+    while (icmp_cksum > 0xFFFF) {
+        icmp_cksum = (icmp_cksum & 0xFFFF) + (icmp_cksum >> 16);
+    }
+    icmp_cksum = (~icmp_cksum) & 0xFFFF;
+    return (icmp_cksum == 0) ? 0xFFFF : (uint16_t) icmp_cksum;
+}
+
 /* generate an echo message from an ipv4 packet.
  * ipv4 header field will not be changed */
 void process_icmp_echo(struct port_conf *port, struct rte_mbuf *mbuf)
@@ -90,6 +114,59 @@ void process_icmp_echo(struct port_conf *port, struct rte_mbuf *mbuf)
     rte_eth_tx_burst(port->port_id, port->queue_id, mbuf_arr, 1);
 }
 
+/* generate an icmp6 reply message from an ipv6 packet.
+ */
+void process_icmp6(struct port_conf *port, struct rte_mbuf *mbuf)
+{
+    struct ipv6_hdr *ip6_hd;
+    struct icmp_hdr *icmp_hd;
+    uint16_t queue_id = 0;
+    struct rte_mbuf  *mbuf_arr[1];
+    struct ether_hdr *eth_h;
+    uint8_t ip6_addr[IPV6_ADDR_LEN];
+
+    eth_h = rte_pktmbuf_mtod(mbuf, struct ether_hdr *);
+
+    ip6_hd = (struct ipv6_hdr *) &eth_h[1];
+    // To convert the stream based interpretation to cpu interpretation
+    ip6_hd->payload_len = ntohs(ip6_hd->payload_len);
+    icmp_hd = (struct icmp_hdr *) &ip6_hd[1];
+
+    if(icmp_hd->icmp_type == NDP_NEIGHBOUR_SOLICITATION) {
+        struct ndp_hdr *ndp_hd;
+        char * p;
+        ndp_hd = (struct ndp_hdr *) &ip6_hd[1];
+        // To convert the stream based interpretation to cpu interpretation
+        ndp_hd->icmp_cksum = ntohs(ndp_hd->icmp_cksum);
+
+        memcpy(&ip6_addr, &ip6_hd->src_addr, IPV6_ADDR_LEN);
+        memcpy(&ip6_hd->src_addr, &port->ipaddr6, IPV6_ADDR_LEN);
+        memcpy(&ip6_hd->dst_addr, &ip6_addr, IPV6_ADDR_LEN);
+
+        // Setting flags that it is in response to solicited request and should refresh the cached-entry.
+        ndp_hd->reserved[0] = SOLICITED_FLAG | OVERRIDE_FLAG;
+        ndp_hd->icmp_type = NDP_NEIGHBOUR_ADVERTISEMENT;
+
+        ip6_hd->hop_limits = 255;  // max limit
+
+        ether_addr_copy(&eth_h->s_addr, &eth_h->d_addr);
+        ether_addr_copy(&port->eth_addr, &eth_h->s_addr);
+
+        ndp_hd->icmp_cksum = icmp6_cksum(icmp_hd, ip6_hd);
+
+    } else if(icmp_hd->icmp_type == IP_ICMP_ECHO_REQUEST && icmp_hd->icmp_code == 0) {
+        // TODO: pending reply for icmp echo
+        return;
+    }
+
+    // Reversing checksum after calculation
+    icmp_hd->icmp_cksum = htons(icmp_hd->icmp_cksum);
+
+    //no need to change buf->pkt_len
+    mbuf_arr[0] = mbuf;
+    rte_eth_tx_burst(port->port_id, port->queue_id, mbuf_arr, 1);
+}
+
 void process_arp(struct port_conf *port, struct rte_mbuf *mb)
 {
     struct rte_mbuf  *mbuf_arr[1];
@@ -116,7 +193,7 @@ void process_arp(struct port_conf *port, struct rte_mbuf *mb)
         return;
     }
 
-    ipv4_addr_dump("\nARP Requested from ip=", arp_h->arp_data.arp_sip);
+    ipv4_uint32_t_addr_dump("\nARP Requested from ip=", arp_h->arp_data.arp_sip);
     fflush(stdout);
 
     /* Use source MAC address as destination MAC address. */
@@ -131,7 +208,7 @@ void process_arp(struct port_conf *port, struct rte_mbuf *mb)
     /* Swap IP addresses in ARP payload */
     ip_addr = arp_h->arp_data.arp_tip;
     arp_h->arp_data.arp_tip = arp_h->arp_data.arp_sip;
-    arp_h->arp_data.arp_sip = port->ipaddr.sin_addr.s_addr;
+    arp_h->arp_data.arp_sip = port->ipaddr;
 
     mbuf_arr[0] = mb;
     rte_eth_tx_burst(port->port_id, port->queue_id, mbuf_arr, 1);

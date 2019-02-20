@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <getopt.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include <rte_ethdev.h>
 #include <signal.h>
@@ -20,10 +21,8 @@
 #include <rte_ether.h>
 
 #include "parser.h"
+#include "ip.h"
 
-#define LEN 16 // Length for holding IP address.
-
-char ip_string_format[LEN];
 struct configuration config;
 // Default values.
 /*config.iteration_no = 0;
@@ -56,59 +55,45 @@ static int is_valid_digit(const char *c) {
     return 1;
 }
 
-static int is_valid_ip_address(const char *ip) {
-    char *ptr = NULL;
-    int octet = 0;
-    uint8_t num_octets = 0;
+static int get_ip_address_type(const char *ip_str) {
+    struct in6_addr ip6;
+    struct in_addr ip4;
+    int type = AF_MAX;
 
-    if (ip == NULL)
-        return 0;
-
-    ptr = strtok((char *)ip, DOT);
-    if (ptr == NULL)
-        return 0;
-
-    while (ptr) {
-        if (!is_valid_digit(ptr))
-            return 0;
-        octet = atoi(ptr);
-        num_octets++;
-        if (octet < 0 || octet > 255)
-            return 0;
-        ptr = strtok(NULL, DOT);
+    if(inet_pton(AF_INET6, ip_str, &ip6) == 1) {
+        type = AF_INET6;
     }
-    if (num_octets != 4)
-        return 0;
-    return 1;
+    else if(inet_pton(AF_INET, ip_str, &ip4) == 1) {
+        type = AF_INET;
+    }
+
+    return type;
 }
 
-static int parse_ip_address(const char *q_arg, char **ip) {
-    char *temp_ip = NULL;
-    int ret = 0;
-
-    /* Creating a temporary copy of q_arg
-     * since strtok modifies the string that it processes
-     */
-    temp_ip = strndup(q_arg, strlen(q_arg));
-        ret = is_valid_ip_address(temp_ip);
-        if (ret != 1) {
-        return -1;
+static int process_ip_addr(const char *what, const char *ip_str, struct sockaddr_in *addr, struct sockaddr_in6 *addr6) {
+    int ip_type = get_ip_address_type(ip_str);
+    if (ip_type == AF_MAX) {
+        rte_exit(EXIT_FAILURE,"Invalid IP Address\n");
     }
-    /* Free up the temporary copy after validation processing */
-    free(temp_ip);
-    /* Create a copy of q_arg which contains a valid IP address
-     * This memory is being free()'d in main()
-         */
-    *ip = strndup(q_arg, strlen(q_arg));
-    return 0;
+    else {
+        char *ip = strndup(ip_str, strlen(ip_str));
+        if (ip_type == AF_INET) {
+            inet_pton(ip_type, ip, &addr->sin_addr);
+            ipv4_addr_dump(what, &addr->sin_addr);
+        } else {
+            inet_pton(ip_type, ip, &addr6->sin6_addr);
+            ipv6_addr_dump(what, &addr6->sin6_addr);
+        }
+    }
+    return ip_type;
 }
 
 /* Parse the argument given in the command line of the application */
 struct configuration *parse_args(int argc, char **argv) {
     int opt, retval;
     char *prgname = argv[0];
-    char *self_ip = NULL;
-    char *remote_ip = NULL;
+    int self_ip_type = AF_MAX;
+    int remote_ip_type = AF_MAX;
 
     // Default values.
     config.iteration_no = 1;
@@ -124,55 +109,41 @@ struct configuration *parse_args(int argc, char **argv) {
         case 't':
             config.timer_period = parse_number(optarg);
             if (config.timer_period < 0) {
-                rte_exit(EXIT_FAILURE, "invalid execution time period provided.\n");
+                rte_exit(EXIT_FAILURE, "Invalid execution time period provided.\n");
             }
             break;
         case 'w':
             config.warm_up_time_period = parse_number(optarg);
             if (config.warm_up_time_period < 0) {
-                rte_exit(EXIT_FAILURE,"invalid warmup time provided.\n");
+                rte_exit(EXIT_FAILURE,"Invalid warmup time provided.\n");
             }
             break;
         case 'e':
             config.extra_timer_period = parse_number(optarg);
             if (config.extra_timer_period < 0) {
-                rte_exit(EXIT_FAILURE,"invalid extra timer provided.\n");
+                rte_exit(EXIT_FAILURE,"Invalid extra timer provided.\n");
             }
             break;
         case 'i':
-            retval = parse_ip_address(optarg, &self_ip);
-            if (retval != 0) {
-                rte_exit(EXIT_FAILURE,"invalid self IP Address\n");
-            }
-            memset(ip_string_format , 0, LEN); // Clear everytime before copying parsed IP.
-            strncpy(ip_string_format, self_ip, strlen(self_ip));
-            inet_aton(ip_string_format, &config.self_ipaddr.sin_addr);
-            ipv4_addr_dump("Self Ip: ",config.self_ipaddr.sin_addr);
+            self_ip_type = process_ip_addr("Self IP: ", optarg, &config.self_ipaddr, &config.self_ipaddr6);
             printf("\n\r");
             break;
         case 's':
-            retval = parse_ip_address(optarg, &remote_ip);
-            if (retval != 0) {
-                rte_exit(EXIT_FAILURE,"invalid remote IP Address\n");
-            }
-            memset(ip_string_format , 0, LEN); // Clear everytime before copying parsed IP.
-            strncpy(ip_string_format, remote_ip, strlen(remote_ip));
-            inet_aton(ip_string_format, &config.remote_ipaddr.sin_addr);
-            ipv4_addr_dump("Remote Ip: ",config.remote_ipaddr.sin_addr);
+            remote_ip_type = process_ip_addr("Remote IP: ", optarg, &config.remote_ipaddr, &config.remote_ipaddr6);
             printf("\n\r");
             break;
         /* long options */
         case 'n':
             config.iteration_no = parse_number(optarg);
             if (config.iteration_no < 0) {
-                rte_exit(EXIT_FAILURE,"invalid iteration number provided.\n");
+                rte_exit(EXIT_FAILURE,"Invalid iteration number provided.\n");
             }
             break;
         /* long options */
         case 'r':
             config.iterations = parse_number(optarg);
             if (config.iterations < 0) {
-                rte_exit(EXIT_FAILURE,"invalid iteration number provided.\n");
+                rte_exit(EXIT_FAILURE,"Invalid iteration number provided.\n");
             }
             break;
         default:
@@ -181,9 +152,15 @@ struct configuration *parse_args(int argc, char **argv) {
         }
     }
 
-   if (config.iteration_no > config.iterations) {
-       rte_exit(EXIT_FAILURE,"current iteration number cannot be higher than iterations.\n");
+    if (config.iteration_no > config.iterations) {
+        rte_exit(EXIT_FAILURE,"Current iteration number cannot be higher than iterations.\n");
     }
+
+    if (self_ip_type != remote_ip_type) {
+        rte_exit(EXIT_FAILURE, "Only same type of IP ports are supported.\n");
+    }
+
+    config.ipv4 = (self_ip_type == AF_INET) ? true : false;
 
     if (optind >= 0)
         argv[optind-1] = prgname;

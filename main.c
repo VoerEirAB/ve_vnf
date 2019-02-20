@@ -51,7 +51,6 @@
 
 #define MBUF_CACHE_SIZE 512
 #define BURST_SIZE 64
-#define LEN 16 // Length for holding IP address.
 #define DOT "."
 
 static volatile bool force_quit;
@@ -94,7 +93,8 @@ static void pkt_classify(struct port_conf *port, struct configuration *config, s
     uint16_t   pType;
     struct ether_hdr *eth_hdr;
     struct udp_hdr *udp_h;
-    struct ipv4_hdr *ipv4_hdr;
+    struct ipv4_hdr *ip4_hdr;
+    struct ipv6_hdr *ip6_hdr;
     struct icmp_hdr *icmphdr;
     union payload_t *payload;
 
@@ -104,35 +104,67 @@ static void pkt_classify(struct port_conf *port, struct configuration *config, s
 
     switch(rte_cpu_to_be_16(pType)) {
         case ETHER_TYPE_ARP:
-            port_stats->arp++;
+            ++port_stats->arp;
             process_arp(port, m);
             break;
         case ETHER_TYPE_IPv4:
-            ipv4_hdr = (struct ipv4_hdr *) &eth_hdr[1];
-            if (ipv4_hdr->next_proto_id == IPPROTO_ICMP) {
-                icmphdr = (struct icmp_hdr *) ((char *)ipv4_hdr + sizeof(struct ipv4_hdr));
-                if (icmphdr->icmp_type == IP_ICMP_ECHO_REQUEST &&
-                    icmphdr->icmp_code == 0) {
-                   port_stats->icmp++;
-                   process_icmp_echo(port, m);
+            if(config->ipv4) {
+                ip4_hdr = (struct ipv4_hdr *) &eth_hdr[1];
+                if (ip4_hdr->next_proto_id == IPPROTO_ICMP) {
+                    icmphdr = (struct icmp_hdr *) ((char *)ip4_hdr + sizeof(struct ipv4_hdr));
+                    if (icmphdr->icmp_type == IP_ICMP_ECHO_REQUEST &&
+                        icmphdr->icmp_code == 0) {
+                       ++port_stats->icmp;
+                       process_icmp_echo(port, m);
+                    }
+                    break;
                 }
+                if (ip4_hdr->src_addr == config->remote_ipaddr.sin_addr.s_addr) {
+                    if (ip4_hdr->next_proto_id == IPPROTO_UDP) {
+                        udp_h = (struct udp_hdr *) &ip4_hdr[1];
+                        payload = (union payload_t *) &udp_h[1];
+                        iteration_no = payload->uint64[0];
+                        port_stats->udp[iteration_no]++;
+                        ++port_stats->rx;
+                        break;
+                     }
+                }
+                ++port_stats->unknown;
+                break;
+            } else {
+                ++port_stats->ipv4;
                 break;
             }
-            if (ipv4_hdr->src_addr == config->remote_ipaddr.sin_addr.s_addr) {
-                if (ipv4_hdr->next_proto_id == IPPROTO_UDP) {
-                    udp_h = (struct udp_hdr *) &ipv4_hdr[1];
-                    payload = (union payload_t *) &udp_h[1];
-                    iteration_no = payload->uint64[0];
-                    port_stats->udp[iteration_no]++;
-                    port_stats->rx++;
-                    break;
-                 }
-            }
-            port_stats->unknown++;     break;
+
         case ETHER_TYPE_IPv6:
-            port_stats->ipv6++;      break;
+            if(config->ipv4) {
+                ++port_stats->ipv6;
+                break;
+            }
+            else {
+                ip6_hdr = (struct ipv6_hdr *) &eth_hdr[1];
+                if (ip6_hdr->proto == IPPROTO_ICMPV6) {
+                    icmphdr = (struct icmp_hdr *) ((char *)ip6_hdr + sizeof(struct ipv6_hdr));
+                    ++port_stats->icmp;
+                    process_icmp6(port, m);
+                    break;
+                }
+                if (is_ip6_equal(ip6_hdr->src_addr, config->remote_ipaddr6.sin6_addr.s6_addr)) {
+                    if (ip6_hdr->proto == IPPROTO_UDP) {
+                        udp_h = (struct udp_hdr *) &ip6_hdr[1];
+                        payload = (union payload_t *) &udp_h[1];
+                        iteration_no = payload->uint64[0];
+                        port_stats->udp[iteration_no]++;
+                        ++port_stats->rx;
+                        break;
+                     }
+                }
+                ++port_stats->unknown;
+                break;
+            }
         default:
-            port_stats->unknown++;     break;
+            ++port_stats->unknown;
+            break;
     }
 }
 
@@ -299,7 +331,11 @@ main(int argc, char *argv[])
     memset(&port, 0, sizeof(port));
     port.port_id = 0;
     port.queue_id = 0;
-    port.ipaddr = conf->self_ipaddr;
+    if(conf->ipv4) {
+        port.ipaddr = conf->self_ipaddr.sin_addr.s_addr;
+    } else {
+        memcpy ( &port.ipaddr6, &conf->self_ipaddr6.sin6_addr.s6_addr, IPV6_ADDR_LEN);
+    }
 
     /* initialize port stats */
     uint8_t len = conf->iteration_no + conf->iterations + 1;
@@ -343,7 +379,7 @@ main(int argc, char *argv[])
     for(int index=0; index < conf->iterations; index++)
         result_size += sprintf(result + result_size,"\"%d\": %" PRIu64 ",", index, port_stats->udp[index]);
 
-    result_size += sprintf(result+result_size,"\"%"PRIu64"\": %" PRIu64 " }}", conf->iterations, port_stats->udp[conf->iterations]);
+    result_size += sprintf(result+result_size,"\"%"PRIu64"\": %" PRIu64 " }}\n", conf->iterations, port_stats->udp[conf->iterations]);
  
     printf("%s", result);
     fflush(stdout);
