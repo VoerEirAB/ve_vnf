@@ -72,7 +72,16 @@ struct port_statistics {
     uint64_t unknown;
     uint64_t udp[];
 } __rte_cache_aligned;
+struct port_statistics *port_stats_1;
 struct port_statistics *port_stats;
+
+struct port_queue_mapping {
+    uint8_t queue_index;
+    uint8_t port_id;
+    void* port_address;
+} __rte_cache_aligned;
+struct port_queue_mapping *port_queue;
+
 
 union payload_t {
         uint8_t  uint8[0];
@@ -89,7 +98,7 @@ static void signal_handler(int signum) {
 }
 
 /* Classify packets from */
-static void pkt_classify(struct port_conf *port, struct configuration *config, struct rte_mbuf *m) {
+static void pkt_classify_1(struct port_conf *port, struct configuration *config, struct rte_mbuf *m) {
     uint16_t   pType;
     struct ether_hdr *eth_hdr;
     struct udp_hdr *udp_h;
@@ -104,8 +113,9 @@ static void pkt_classify(struct port_conf *port, struct configuration *config, s
 
     switch(rte_cpu_to_be_16(pType)) {
         case ETHER_TYPE_ARP:
+//            printf("ARP packet received\n");
             ++port_stats->arp;
-            process_arp(port, m);
+//            process_arp(port, m);
             break;
         case ETHER_TYPE_IPv4:
             if(config->ipv4) {
@@ -163,30 +173,111 @@ static void pkt_classify(struct port_conf *port, struct configuration *config, s
                 break;
             }
         default:
+            printf("Discarded packet received");
             ++port_stats->unknown;
             break;
+        printf("Processed");
+    }
+}
+
+static void pkt_classify_2(struct port_conf *port, struct configuration *config, struct rte_mbuf *m) {
+    uint16_t   pType;
+    struct ether_hdr *eth_hdr;
+    struct udp_hdr *udp_h;
+    struct ipv4_hdr *ip4_hdr;
+    struct ipv6_hdr *ip6_hdr;
+    struct icmp_hdr *icmphdr;
+    union payload_t *payload;
+
+    //uint32_t offset = 0; // VLAN offset. 0 in VM.
+    eth_hdr = rte_pktmbuf_mtod(m, struct ether_hdr *);
+    pType = eth_hdr->ether_type;
+
+    switch(rte_cpu_to_be_16(pType)) {
+        case ETHER_TYPE_ARP:
+            printf("ARP packet received\n");
+            ++port_stats_1->arp;
+//            process_arp(port, m);
+            break;
+        case ETHER_TYPE_IPv4:
+            if(config->ipv4) {
+                ip4_hdr = (struct ipv4_hdr *) &eth_hdr[1];
+                if (ip4_hdr->next_proto_id == IPPROTO_ICMP) {
+                    icmphdr = (struct icmp_hdr *) ((char *)ip4_hdr + sizeof(struct ipv4_hdr));
+                    if (icmphdr->icmp_type == IP_ICMP_ECHO_REQUEST &&
+                        icmphdr->icmp_code == 0) {
+                       ++port_stats_1->icmp;
+                       process_icmp_echo(port, m);
+                    }
+                    break;
+                }
+                if (ip4_hdr->src_addr == config->remote_ipaddr.sin_addr.s_addr) {
+                    if (ip4_hdr->next_proto_id == IPPROTO_UDP) {
+                        udp_h = (struct udp_hdr *) &ip4_hdr[1];
+                        payload = (union payload_t *) &udp_h[1];
+                        iteration_no = payload->uint64[0];
+                        port_stats_1->udp[iteration_no]++;
+                        ++port_stats_1->rx;
+                        break;
+                     }
+                }
+                ++port_stats_1->unknown;
+                break;
+            } else {
+                ++port_stats_1->ipv4;
+                break;
+            }
+
+        case ETHER_TYPE_IPv6:
+            if(config->ipv4) {
+                ++port_stats_1->ipv6;
+                break;
+            }
+            else {
+                ip6_hdr = (struct ipv6_hdr *) &eth_hdr[1];
+                if (ip6_hdr->proto == IPPROTO_ICMPV6) {
+                    icmphdr = (struct icmp_hdr *) ((char *)ip6_hdr + sizeof(struct ipv6_hdr));
+                    ++port_stats_1->icmp;
+                    process_icmp6(port, m);
+                    break;
+                }
+                if (is_ip6_equal(ip6_hdr->src_addr, config->remote_ipaddr6.sin6_addr.s6_addr)) {
+                    if (ip6_hdr->proto == IPPROTO_UDP) {
+                        udp_h = (struct udp_hdr *) &ip6_hdr[1];
+                        payload = (union payload_t *) &udp_h[1];
+                        iteration_no = payload->uint64[0];
+                        port_stats_1->udp[iteration_no]++;
+                        ++port_stats_1->rx;
+                        break;
+                     }
+                }
+                ++port_stats_1->unknown;
+                break;
+            }
+        default:
+            printf("Discarded packet received");
+            ++port_stats_1->unknown;
+            break;
+        printf("Processed");
     }
 }
 
 /* Initialize DPDK port. */
 static inline int port_init(struct port_conf *port) {
-    const uint16_t rx_rings = 1, tx_rings = 1;
+    uint16_t rx_rings;
+    uint16_t tx_rings;
     struct rte_eth_rxconf rxq_conf;
     struct rte_eth_txconf txq_conf;
     struct rte_eth_dev_info dev_info;
     struct rte_mempool *mbuf_pool;
+    struct rte_mempool *pool[2];
     int retval;
     uint16_t q;
+    rx_rings = 2;
+    tx_rings = 2;
 
     if (port->port_id >= rte_eth_dev_count())
         return -1;
-
-    /* Creates a new mempool in memory to hold the mbufs. */
-    mbuf_pool = rte_pktmbuf_pool_create("MBUF_POOL", NUM_MBUFS,
-        MBUF_CACHE_SIZE, 0, BUF_SIZE, rte_socket_id());
-
-    if (mbuf_pool == NULL)
-        rte_exit(EXIT_FAILURE, "Cannot create mbuf pool\n");
 
     /* Configure the Ethernet device. */
     retval = rte_eth_dev_configure(port->port_id, rx_rings, tx_rings, &eth_conf);
@@ -201,9 +292,21 @@ static inline int port_init(struct port_conf *port) {
     rxq_conf.rx_drop_en = 0;
     rxq_conf.rx_deferred_start = 0;
 
+    mbuf_pool = rte_pktmbuf_pool_create("Queue 0", NUM_MBUFS,
+            MBUF_CACHE_SIZE, 0, BUF_SIZE, rte_socket_id());
+    if (mbuf_pool == NULL)
+        rte_exit(EXIT_FAILURE, "Cannot create mbuf pool\n");
+    pool[0] = mbuf_pool;
+
+    mbuf_pool = rte_pktmbuf_pool_create("Queue 1", NUM_MBUFS,
+        MBUF_CACHE_SIZE, 0, BUF_SIZE, rte_socket_id());
+    if (mbuf_pool == NULL)
+        rte_exit(EXIT_FAILURE, "Cannot create mbuf pool\n");
+    pool[1] = mbuf_pool;
+
     for (q = 0; q < rx_rings; q++) {
         retval = rte_eth_rx_queue_setup(port->port_id, q, RX_RING_SIZE,
-                rte_socket_id(), &rxq_conf, mbuf_pool);
+                rte_socket_id(), &rxq_conf, pool[q]);
         if (retval < 0)
             return retval;
     }
@@ -244,36 +347,30 @@ static inline int port_init(struct port_conf *port) {
  * Process incoming packets and handle accordingly.
  */
 static int
-lcore_main(void *port_void_type)
+lcore_main_1(void *port_void_type)
 {
     const uint8_t nb_ports = rte_eth_dev_count();
     const uint16_t nb_tx = 0;
-    struct port_conf *port = (struct port_conf *)port_void_type;
-    uint8_t portid = port->port_id;
+    struct port_queue_mapping *port_queue = (struct port_queue_mapping *)port_void_type;
+    uint8_t queue_index = 0;
+    printf("Queue Index\n");
+    uint8_t portid = 0;
+    printf("Port ID %d\n", portid);
+    struct port_conf *port = (struct port_conf*)(port_queue->port_address);
+    printf("Port Created");
     uint8_t index = 0;
-    /* Initialize port. */
-    if (port_init(port) != 0){
-        rte_exit(EXIT_FAILURE, "Cannot init port %"PRIu8 "\n",
-                portid);
-        force_quit = true;
-     }
+
     /*
      * Check that the port is on the same NUMA node as the polling thread
      * for best performance.
      */
-    if (rte_eth_dev_socket_id(portid) > 0 &&
-            rte_eth_dev_socket_id(portid) !=
-                    (int)rte_socket_id())
-        printf("WARNING, port %u is on remote NUMA node to "
-                "polling thread.\n\tPerformance will "
-                "not be optimal.\n", portid);
 
     printf("\nCore %u processing packets of port_id: %u\n", rte_lcore_id(), portid);
     /* Run until the application is quit or killed. */
     while (!force_quit) {
         /* Get burst of RX packets, from first port of pair. */
         struct rte_mbuf *bufs[BURST_SIZE];
-        const uint16_t nb_rx = rte_eth_rx_burst(portid, 0, bufs, BURST_SIZE);
+        const uint16_t nb_rx = rte_eth_rx_burst(portid, queue_index, bufs, BURST_SIZE);
 
         if (unlikely(nb_rx == 0))
             continue;
@@ -282,12 +379,54 @@ lcore_main(void *port_void_type)
         if (unlikely(nb_tx < nb_rx)) {
             uint16_t buf;
             for (buf = nb_tx; buf < nb_rx; buf++){
-                pkt_classify(port, conf, bufs[buf]);
+                pkt_classify_1(port, conf, bufs[buf]);
                 rte_pktmbuf_free(bufs[buf]);
             }
         }
     }
 }
+
+
+static int
+lcore_main_2(void *port_void_type)
+{
+    const uint8_t nb_ports = rte_eth_dev_count();
+    const uint16_t nb_tx = 0;
+    struct port_queue_mapping *port_queue = (struct port_queue_mapping *)port_void_type;
+    uint8_t queue_index = 1;
+    printf("Queue Index\n");
+    uint8_t portid = 0;
+    printf("Port ID %d\n", portid);
+    struct port_conf *port = (struct port_conf*)(port_queue->port_address);
+    printf("Port Created");
+    uint8_t index = 0;
+
+    /*
+     * Check that the port is on the same NUMA node as the polling thread
+     * for best performance.
+     */
+
+    printf("\nCore %u processing packets of port_id: %u\n", rte_lcore_id(), portid);
+    /* Run until the application is quit or killed. */
+    while (!force_quit) {
+        /* Get burst of RX packets, from first port of pair. */
+        struct rte_mbuf *bufs[BURST_SIZE];
+        const uint16_t nb_rx = rte_eth_rx_burst(portid, queue_index, bufs, BURST_SIZE);
+
+        if (unlikely(nb_rx == 0))
+            continue;
+
+        /* Free any unsent packets. */
+        if (unlikely(nb_tx < nb_rx)) {
+            uint16_t buf;
+            for (buf = nb_tx; buf < nb_rx; buf++){
+                pkt_classify_2(port, conf, bufs[buf]);
+                rte_pktmbuf_free(bufs[buf]);
+            }
+        }
+    }
+}
+
 
 /*
  * The main function, which does initialization and calls the per-lcore
@@ -330,7 +469,6 @@ main(int argc, char *argv[])
     /* initialize port stats */
     memset(&port, 0, sizeof(port));
     port.port_id = 0;
-    port.queue_id = 0;
     if(conf->ipv4) {
         port.ipaddr = conf->self_ipaddr.sin_addr.s_addr;
     } else {
@@ -339,11 +477,34 @@ main(int argc, char *argv[])
 
     /* initialize port stats */
     uint8_t len = conf->iteration_no + conf->iterations + 1;
+    port_queue = malloc(sizeof(struct port_queue_mapping));
     port_stats = malloc(sizeof(struct port_statistics) + sizeof(uint64_t) * len);
     memset(port_stats, 0, sizeof(struct port_statistics) + sizeof(uint64_t) * len);
+    port_stats_1 = malloc(sizeof(struct port_statistics) + sizeof(uint64_t) * len);
+    memset(port_stats_1, 0, sizeof(struct port_statistics) + sizeof(uint64_t) * len);
+    struct port_conf *test_port = (struct port_conf *)(&port);
+    uint8_t portid = port.port_id;
+
+    /* Initialize port. */
+    if (port_init(test_port) != 0){
+        rte_exit(EXIT_FAILURE, "Cannot init port %"PRIu8 "\n", portid);
+        force_quit = true;
+    }
+
+    if (rte_eth_dev_socket_id(portid) > 0 &&
+            rte_eth_dev_socket_id(portid) !=
+                    (int)rte_socket_id())
+        printf("WARNING, port %u is on remote NUMA node to "
+                "polling thread.\n\tPerformance will "
+                "not be optimal.\n", portid);
 
     /* Call lcore_main on the master core only. */
-    rte_eal_remote_launch(lcore_main, &port, lcore_id);
+    port_queue->port_id = portid;
+    printf("Port ID first %d", port_queue->port_id);
+    port_queue->port_address = &port;
+    port_queue->queue_index = 0;
+    rte_eal_remote_launch(lcore_main_1, &port_queue, lcore_id);
+    rte_eal_remote_launch(lcore_main_2, &port_queue, lcore_id + 1);
 
    /* convert to number of cycles */
     timer_period = conf->timer_period + conf->extra_timer_period + conf->warm_up_time_period;
@@ -380,17 +541,40 @@ main(int argc, char *argv[])
         result_size += sprintf(result + result_size,"\"%d\": %" PRIu64 ",", index, port_stats->udp[index]);
 
     result_size += sprintf(result+result_size,"\"%"PRIu64"\": %" PRIu64 " }}\n", conf->iterations, port_stats->udp[conf->iterations]);
- 
+
     printf("%s", result);
     fflush(stdout);
     free(port_stats);
+
+    rte_eal_mp_wait_lcore();
+    result_size = sprintf(result,"\n{"
+               "\"flows\": 0,\n"
+               "\"ARP_Packets\": %" PRIu64 ",\n"
+               "\"IPV4_received\": %" PRIu64 ",\n"
+               "\"ICMP Echo Request\": %" PRIu64 ",\n"
+               "\"Unknown packets\": %" PRIu64 ",\n"
+               "\"payload\" : {\n",
+               port_stats_1->arp,
+               port_stats_1->ipv4,
+               port_stats_1->icmp,
+               port_stats_1->unknown);
+
+    for(int index=0; index < conf->iterations; index++)
+        result_size += sprintf(result + result_size,"\"%d\": %" PRIu64 ",", index, port_stats_1->udp[index]);
+
+    result_size += sprintf(result+result_size,"\"%"PRIu64"\": %" PRIu64 " }}\n", conf->iterations, port_stats_1->udp[conf->iterations]);
+
+    printf("%s", result);
+    fflush(stdout);
+    free(port_stats_1);
+
     file_handler = fopen("./rxStats.txt", "w");
     if (file_handler == NULL)
         rte_exit(EXIT_FAILURE, "%s: Open %s failed\n", __func__,
                  "rxStats.txt");
     fwrite(result, 1, result_size, file_handler);
-    fclose(file_handler); 
-    
+    fclose(file_handler);
+
     return 0;
 }
 
