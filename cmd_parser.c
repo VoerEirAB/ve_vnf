@@ -100,6 +100,7 @@ struct configuration *parse_args(int argc, char **argv) {
     config.extra_timer_period = 10;
     config.warm_up_time_period = 2;
     config.iterations = 20;
+    config.rx_queues = 1;
     /* initialize Configuration */
     //memset(&config, 0, sizeof(config));
 
@@ -137,6 +138,13 @@ struct configuration *parse_args(int argc, char **argv) {
             config.iteration_no = parse_number(optarg);
             if (config.iteration_no < 0) {
                 rte_exit(EXIT_FAILURE,"Invalid iteration number provided.\n");
+            }
+            break;
+        /* long options */
+        case 'q':
+            config.rx_queues = parse_number(optarg);
+            if (config.rx_queues < 0) {
+                rte_exit(EXIT_FAILURE,"Invalid rx queues provided.\n");
             }
             break;
         /* long options */
