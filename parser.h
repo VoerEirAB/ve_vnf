@@ -28,6 +28,7 @@ struct configuration {
    struct sockaddr_in6 remote_ipaddr6; /* Remote IPv6 address. */
    uint64_t iteration_no; /* default iteration number is 1 */
    uint64_t iterations; /* default iterations are 20 */
+   uint64_t rx_queues; /* default rx_queues is 1 */
    bool ipv4; /* Active IP Mode is IPv4 */
 };
 
@@ -41,6 +42,7 @@ static const char short_options[] =
     "e:" /* extra time defaults to 10 */
     "n:" /* iteration number*/
     "r:" /* number of iterations */
+    "q:" /* number of rx queues */
     ;
 
 #endif
