@@ -404,9 +404,9 @@ main(int argc, char *argv[])
 
     for (q=0; q< conf->rx_queues; q++)
     {
-        lcore_id = rte_get_next_lcore(lcore_id, 1, 1);
         printf("\nCore %u processing packets of port_id: %u on queue_id: %u\n", lcore_id, mapping[q]->port_id, mapping[q]->queue_id);
         rte_eal_remote_launch(lcore_main, mapping[q], lcore_id);
+        lcore_id = rte_lcore_id();
     }
 
     wait_for_time(conf);
