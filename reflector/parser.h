@@ -3,6 +3,11 @@
 #ifndef __VE_PARSER_H
 #define __VE_PARSER_H
 
+#include <inttypes.h>
+#define MAX_PKT_SIZE 100000
+#define MAX_STR_LEN_PROC  (3 * MAX_PKT_SIZE + 20)
+
+
 #define is_multicast_ipv4_addr(ipv4_addr)  \
          (((rte_be_to_cpu_32((ipv4_addr)) >> 24) & 0x000000FF) == 0xE0)
 
@@ -18,6 +23,9 @@ static int parse_number(const char *q_arg);
 
 static int process_ip_addr(const char *what, const char *ip_str, struct sockaddr_in *addr, struct sockaddr_in6 *addr6);
 
+static struct ether_addr* parse_mac(const char *str2);
+
+
 struct configuration {
    uint64_t timer_period; /* default period is 60 seconds */
    uint64_t extra_timer_period; /* default extra time period of 10 sec */
@@ -30,6 +38,7 @@ struct configuration {
    uint64_t iterations; /* default iterations are 20 */
    uint64_t rx_queues; /* default rx_queues is 1 */
    bool ipv4; /* Active IP Mode is IPv4 */
+   const struct ether_addr *destination; /* Destination Mac address used in Loopback mode */
 };
 
 static const char short_options[] =
@@ -43,6 +52,7 @@ static const char short_options[] =
     "n:" /* iteration number*/
     "r:" /* number of iterations */
     "q:" /* number of rx queues */
+    "d:" /* Destination mac address used only in Loopback */
     ;
 
 #endif

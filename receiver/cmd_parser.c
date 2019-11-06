@@ -6,6 +6,10 @@
 **/
 
 #include <stdio.h>
+#include <ctype.h>
+#include <float.h>
+#include <math.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdarg.h>
@@ -19,6 +23,8 @@
 #include <stdbool.h>
 #include <rte_ip.h>
 #include <rte_ether.h>
+#include <rte_string_fns.h>
+
 
 #include "parser.h"
 #include "ip.h"
@@ -87,6 +93,7 @@ static int process_ip_addr(const char *what, const char *ip_str, struct sockaddr
     }
     return ip_type;
 }
+
 
 /* Parse the argument given in the command line of the application */
 struct configuration *parse_args(int argc, char **argv) {
