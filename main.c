@@ -331,6 +331,28 @@ lcore_main(void *port_mapping_void_type)
     }
 }
 
+
+/*
+Method to get next lcore id needed to run task.
+*/
+int get_task_lcore_id(master_lcore_id)
+{
+    int lcore_id;
+    int socket_id = rte_socket_id();
+    for (int i=0; i < rte_lcore_count(); i++)
+    {
+        lcore_id = rte_get_next_lcore(master_lcore_id, 1, 0);
+        if (lcore_id == RTE_MAX_LCORE)
+            rte_exit(EXIT_FAILURE, "Insufficient number of cores available");
+
+        if (rte_lcore_to_socket_id(lcore_id) != socket_id || rte_eal_get_lcore_state(lcore_id) == RUNNING)
+            continue;
+        return lcore_id;
+    }
+    rte_exit(EXIT_FAILURE, "Insufficient number of cores available");
+}
+
+
 /*
  * The main function, which does initialization and calls the per-lcore
  * functions.
@@ -404,7 +426,7 @@ main(int argc, char *argv[])
 
     for (q=0; q< conf->rx_queues; q++)
     {
-        lcore_id = rte_get_next_lcore(lcore_id, 1, 1);
+        lcore_id = get_task_lcore_id(lcore_id);
         printf("\nCore %u processing packets of port_id: %u on queue_id: %u\n", lcore_id, mapping[q]->port_id, mapping[q]->queue_id);
         rte_eal_remote_launch(lcore_main, mapping[q], lcore_id);
     }
