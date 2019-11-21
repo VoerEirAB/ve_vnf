@@ -308,6 +308,8 @@ static int transfer_packets_from_ring(void *port_mapping_void_type)
     uint64_t id_cycles = 0;
     uint8_t batch_size = 64;
     uint8_t tmp;
+    uint8_t actual_sent = 0;
+    uint8_t actual_batch_sent = 0;
     uint64_t total_packets_sent = 0;
     struct rte_mbuf* bufs[batch_size];
     while (!force_quit) {
@@ -319,9 +321,12 @@ static int transfer_packets_from_ring(void *port_mapping_void_type)
 				n = rte_ring_sc_dequeue_bulk(lpbk_ring, (void**)(bufs), cur_batch_size, NULL);
 			}
 			if (n) {
-				for (int i = 0; i < cur_batch_size; i++) {
-				    total_packets_sent += rte_eth_tx_burst(portid, queueid, bufs + i, 1);
-				}
+			    while(n){
+			        actual_sent = rte_eth_tx_burst(portid, queueid, bufs, n);
+                    n -= actual_sent;
+                    actual_batch_sent += actual_sent;
+			    }
+			    total_packets_sent += n;
 			} else if (!force_quit) {
 			    continue;
 			}
