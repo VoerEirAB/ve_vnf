@@ -22,7 +22,7 @@
 #include "ip.h"
 #include "utils.h"
 
-uint16_t icmp6_cksum(struct icmp_hdr * icmp_hd, struct ipv6_hdr * ip6_hd)
+uint16_t icmp6_cksum(struct rte_icmp_hdr * icmp_hd, struct rte_ipv6_hdr * ip6_hd)
 {
     uint32_t icmp_cksum;
     icmp_cksum = ipv6_pseudohdr_sum(ip6_hd);
@@ -50,21 +50,21 @@ uint16_t icmp6_cksum(struct icmp_hdr * icmp_hd, struct ipv6_hdr * ip6_hd)
  * ipv4 header field will not be changed */
 void process_icmp_echo(struct port_conf *port, struct rte_mbuf *mbuf)
 {
-    struct ipv4_hdr *ip_hdr;
-    struct icmp_hdr *icmp_hd;
+    struct rte_ipv4_hdr *ip_hdr;
+    struct rte_icmp_hdr *icmp_hd;
     uint16_t queue_id = 0;
     struct rte_mbuf  *mbuf_arr[1];
-    struct ether_addr eth_addr;
-    struct ether_hdr *eth_h;
+    struct rte_ether_addr eth_addr;
+    struct rte_ether_hdr *eth_h;
     uint32_t ip_addr;
     uint32_t cksum;
 
-    eth_h = rte_pktmbuf_mtod(mbuf, struct ether_hdr *);
-    //ip_hdr = rte_pktmbuf_mtod_offset(mbuf, struct ipv4_hdr *, sizeof(struct ether_hdr)) + sizeof(struct ether_hdr) ;
-    ip_hdr = (struct ipv4_hdr *) &eth_h[1];
-    //ipv4_hdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(mbuf, char *) + mbuf->l2_len);
+    eth_h = rte_pktmbuf_mtod(mbuf, struct rte_ether_hdr *);
+    //ip_hdr = rte_pktmbuf_mtod_offset(mbuf, struct rte_ipv4_hdr *, sizeof(struct rte_ether_hdr)) + sizeof(struct rte_ether_hdr) ;
+    ip_hdr = (struct rte_ipv4_hdr *) &eth_h[1];
+    //ipv4_hdr = (struct rte_ipv4_hdr*) (rte_pktmbuf_mtod(mbuf, char *) + mbuf->l2_len);
 
-    icmp_hd = (struct icmp_hdr *) ((char *)ip_hdr + sizeof(struct ipv4_hdr));
+    icmp_hd = (struct rte_icmp_hdr *) ((char *)ip_hdr + sizeof(struct rte_ipv4_hdr));
     /*
      * Prepare ICMP echo reply to be sent back.
      * - switch ethernet source and destinations addresses,
@@ -79,13 +79,13 @@ void process_icmp_echo(struct port_conf *port, struct rte_mbuf *mbuf)
      *     - switch the request IP source and destination
      *       addresses in the reply IP header,
      *     - keep the IP header checksum unchanged.
-     * - set IP_ICMP_ECHO_REPLY in ICMP header.
+     * - set RTE_IP_ICMP_ECHO_REPLY in ICMP header.
      * ICMP checksum is computed by assuming it is valid in the
      * echo request and not verified.
      */
-     ether_addr_copy(&eth_h->s_addr, &eth_addr);
-     ether_addr_copy(&eth_h->d_addr, &eth_h->s_addr);
-     ether_addr_copy(&eth_addr, &eth_h->d_addr);
+     rte_ether_addr_copy(&eth_h->s_addr, &eth_addr);
+     rte_ether_addr_copy(&eth_h->d_addr, &eth_h->s_addr);
+     rte_ether_addr_copy(&eth_addr, &eth_h->d_addr);
      ip_addr = ip_hdr->src_addr;
      if (is_multicast_ipv4_addr(ip_hdr->dst_addr)) {
          uint32_t ip_src;
@@ -101,10 +101,10 @@ void process_icmp_echo(struct port_conf *port, struct rte_mbuf *mbuf)
          ip_hdr->src_addr = ip_hdr->dst_addr;
          ip_hdr->dst_addr = ip_addr;
     }
-    icmp_hd->icmp_type = IP_ICMP_ECHO_REPLY;
+    icmp_hd->icmp_type = RTE_IP_ICMP_ECHO_REPLY;
     cksum = ~icmp_hd->icmp_cksum & 0xffff;
-    cksum += ~htons(IP_ICMP_ECHO_REQUEST << 8) & 0xffff;
-    cksum += htons(IP_ICMP_ECHO_REPLY << 8);
+    cksum += ~htons(RTE_IP_ICMP_ECHO_REQUEST << 8) & 0xffff;
+    cksum += htons(RTE_IP_ICMP_ECHO_REPLY << 8);
     cksum = (cksum & 0xffff) + (cksum >> 16);
     cksum = (cksum & 0xffff) + (cksum >> 16);
     icmp_hd->icmp_cksum = ~cksum;
@@ -118,19 +118,19 @@ void process_icmp_echo(struct port_conf *port, struct rte_mbuf *mbuf)
  */
 void process_icmp6(struct port_conf *port, struct rte_mbuf *mbuf)
 {
-    struct ipv6_hdr *ip6_hd;
-    struct icmp_hdr *icmp_hd;
+    struct rte_ipv6_hdr *ip6_hd;
+    struct rte_icmp_hdr *icmp_hd;
     uint16_t queue_id = 0;
     struct rte_mbuf  *mbuf_arr[1];
-    struct ether_hdr *eth_h;
+    struct rte_ether_hdr *eth_h;
     uint8_t ip6_addr[IPV6_ADDR_LEN];
 
-    eth_h = rte_pktmbuf_mtod(mbuf, struct ether_hdr *);
+    eth_h = rte_pktmbuf_mtod(mbuf, struct rte_ether_hdr *);
 
-    ip6_hd = (struct ipv6_hdr *) &eth_h[1];
+    ip6_hd = (struct rte_ipv6_hdr *) &eth_h[1];
     // To convert the stream based interpretation to cpu interpretation
     ip6_hd->payload_len = ntohs(ip6_hd->payload_len);
-    icmp_hd = (struct icmp_hdr *) &ip6_hd[1];
+    icmp_hd = (struct rte_icmp_hdr *) &ip6_hd[1];
 
     if(icmp_hd->icmp_type == NDP_NEIGHBOUR_SOLICITATION) {
         struct ndp_hdr *ndp_hd;
@@ -149,12 +149,12 @@ void process_icmp6(struct port_conf *port, struct rte_mbuf *mbuf)
 
         ip6_hd->hop_limits = 255;  // max limit
 
-        ether_addr_copy(&eth_h->s_addr, &eth_h->d_addr);
-        ether_addr_copy(&port->eth_addr, &eth_h->s_addr);
+        rte_ether_addr_copy(&eth_h->s_addr, &eth_h->d_addr);
+        rte_ether_addr_copy(&port->eth_addr, &eth_h->s_addr);
 
         ndp_hd->icmp_cksum = icmp6_cksum(icmp_hd, ip6_hd);
 
-    } else if(icmp_hd->icmp_type == IP_ICMP_ECHO_REQUEST && icmp_hd->icmp_code == 0) {
+    } else if(icmp_hd->icmp_type == RTE_IP_ICMP_ECHO_REQUEST && icmp_hd->icmp_code == 0) {
         // TODO: pending reply for icmp echo
         return;
     }
@@ -170,25 +170,25 @@ void process_icmp6(struct port_conf *port, struct rte_mbuf *mbuf)
 void process_arp(struct port_conf *port, struct rte_mbuf *mb)
 {
     struct rte_mbuf  *mbuf_arr[1];
-    struct ether_hdr *eth_hdr;
-    struct ipv4_hdr *ip_hdr;
+    struct rte_ether_hdr *eth_hdr;
+    struct rte_ipv4_hdr *ip_hdr;
     uint16_t arp_op;
     uint16_t arp_pro;
-    struct arp_hdr  *arp_h;
+    struct rte_arp_hdr  *arp_h;
     uint16_t queue_id = 0;
     int l2_len;
     uint32_t ip_addr;
 
-    eth_hdr = rte_pktmbuf_mtod(mb, struct ether_hdr *);
-    ip_hdr = (struct ipv4_hdr *) &eth_hdr[1];
-    //ip_hdr = rte_pktmbuf_mtod_offset(mb, struct ipv4_hdr *, sizeof(struct ether_hdr));
-    l2_len = sizeof(struct ether_hdr);
+    eth_hdr = rte_pktmbuf_mtod(mb, struct rte_ether_hdr *);
+    ip_hdr = (struct rte_ipv4_hdr *) &eth_hdr[1];
+    //ip_hdr = rte_pktmbuf_mtod_offset(mb, struct rte_ipv4_hdr *, sizeof(struct rte_ether_hdr));
+    l2_len = sizeof(struct rte_ether_hdr);
 
-    arp_h = (struct arp_hdr *) ((char *)eth_hdr + l2_len);
-    arp_op = rte_cpu_to_be_16(arp_h->arp_op);
+    arp_h = (struct rte_arp_hdr *) ((char *)eth_hdr + l2_len);
+    arp_op = rte_cpu_to_be_16(arp_h->arp_opcode);
 
     // Do not do anything if ARP is not requested.
-    if (arp_op != ARP_OP_REQUEST) {
+    if (arp_op != RTE_ARP_OP_REQUEST) {
         rte_pktmbuf_free(mb);
         return;
     }
@@ -197,13 +197,13 @@ void process_arp(struct port_conf *port, struct rte_mbuf *mb)
     fflush(stdout);
 
     /* Use source MAC address as destination MAC address. */
-    ether_addr_copy(&eth_hdr->s_addr, &eth_hdr->d_addr);
+    rte_ether_addr_copy(&eth_hdr->s_addr, &eth_hdr->d_addr);
     /* Set source MAC address with MAC address of TX port */
-    ether_addr_copy(&port->eth_addr, &eth_hdr->s_addr);
+    rte_ether_addr_copy(&port->eth_addr, &eth_hdr->s_addr);
 
-    arp_h->arp_op = rte_cpu_to_be_16(ARP_OP_REPLY);
-    ether_addr_copy(&arp_h->arp_data.arp_sha, &arp_h->arp_data.arp_tha);
-    ether_addr_copy(&port->eth_addr, &arp_h->arp_data.arp_sha);
+    arp_h->arp_opcode = rte_cpu_to_be_16(RTE_ARP_OP_REPLY);
+    rte_ether_addr_copy(&arp_h->arp_data.arp_sha, &arp_h->arp_data.arp_tha);
+    rte_ether_addr_copy(&port->eth_addr, &arp_h->arp_data.arp_sha);
 
     /* Swap IP addresses in ARP payload */
     ip_addr = arp_h->arp_data.arp_tip;

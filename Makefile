@@ -21,7 +21,7 @@ CFLAGS += -O3
 #CFLAGS += $(WERROR_FLAGS)
 CFLAGS:=$(filter-out -Werror=unused-variable,$(CFLAGS))
 
-SRCS-y += icmp_arp.c
+SRCS-y += icmp.c
 SRCS-y += cmd_parser.c
 SRCS-y += ip.c
 

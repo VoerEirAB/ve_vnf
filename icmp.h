@@ -19,7 +19,7 @@ struct ndp_hdr {
 	uint8_t address[16]; /* Target address. */
 } __attribute__((__packed__));
 
-uint16_t icmp6_cksum(struct icmp_hdr * icmp_hd, struct ipv6_hdr * ip6_hd);
+uint16_t icmp6_cksum(struct rte_icmp_hdr * icmp_hd, struct rte_ipv6_hdr * ip6_hd);
 
 /* send an echo reply message from an ipv4 packet.*/
 void process_icmp_echo(struct port_conf *port, struct rte_mbuf *buf);
