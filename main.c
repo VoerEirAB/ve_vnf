@@ -54,7 +54,7 @@
 #define DOT "."
 
 static volatile bool force_quit;
-struct ether_addr port_eth_addr;
+struct rte_ether_addr port_eth_addr;
 struct port_conf port;
 struct rte_mempool *mbuf_pool;
 struct configuration *conf;
@@ -108,7 +108,7 @@ static void wait_for_time(struct configuration *conf)
     timer_tsc = 0;
 
     /* convert to number of cycles */
-    timer_period = conf->timer_period + conf->extra_timer_period + conf->warm_up_time_period;
+    timer_period = conf->timer_period + conf->extra_timer_period + conf->warm_up_time_period + 5;
     timer_period *= rte_get_timer_hz();
     prev_tsc = rte_rdtsc();
     while (!force_quit) {
@@ -128,37 +128,36 @@ static void wait_for_time(struct configuration *conf)
 /* Classify packets from */
 static void pkt_classify(struct port_conf *port, struct configuration *config, struct rte_mbuf *m, struct port_statistics *stats) {
     uint16_t   pType;
-    struct ether_hdr *eth_hdr;
-    struct udp_hdr *udp_h;
-    struct ipv4_hdr *ip4_hdr;
-    struct ipv6_hdr *ip6_hdr;
-    struct icmp_hdr *icmphdr;
+    struct rte_ether_hdr *eth_hdr;
+    struct rte_udp_hdr *udp_h;
+    struct rte_ipv4_hdr *ip4_hdr;
+    struct rte_ipv6_hdr *ip6_hdr;
+    struct rte_icmp_hdr *icmphdr;
     union payload_t *payload;
 
     //uint32_t offset = 0; // VLAN offset. 0 in VM.
-    eth_hdr = rte_pktmbuf_mtod(m, struct ether_hdr *);
-    pType = eth_hdr->ether_type;
+    eth_hdr = rte_pktmbuf_mtod(m, struct rte_ether_hdr *);
 
-    switch(rte_cpu_to_be_16(pType)) {
-        case ETHER_TYPE_ARP:
+    switch(rte_cpu_to_be_16(eth_hdr->ether_type)) {
+        case RTE_ETHER_TYPE_ARP:
             ++stats->arp;
-            process_arp(port, m);
+//            process_arp(port, m);
             break;
-        case ETHER_TYPE_IPv4:
+        case RTE_ETHER_TYPE_IPV4:
             if(config->ipv4) {
-                ip4_hdr = (struct ipv4_hdr *) &eth_hdr[1];
+                ip4_hdr = (struct rte_ipv4_hdr *) &eth_hdr[1];
                 if (ip4_hdr->next_proto_id == IPPROTO_ICMP) {
-                    icmphdr = (struct icmp_hdr *) ((char *)ip4_hdr + sizeof(struct ipv4_hdr));
-                    if (icmphdr->icmp_type == IP_ICMP_ECHO_REQUEST &&
+                    icmphdr = (struct rte_icmp_hdr *) ((char *)ip4_hdr + sizeof(struct rte_ipv4_hdr));
+                    if (icmphdr->icmp_type == RTE_IP_ICMP_ECHO_REQUEST &&
                         icmphdr->icmp_code == 0) {
                        ++stats->icmp;
-                       process_icmp_echo(port, m);
+//                       process_icmp_echo(port, m);
                     }
                     break;
                 }
                 if (ip4_hdr->src_addr == config->remote_ipaddr.sin_addr.s_addr) {
                     if (ip4_hdr->next_proto_id == IPPROTO_UDP) {
-                        udp_h = (struct udp_hdr *) &ip4_hdr[1];
+                        udp_h = (struct rte_udp_hdr *) &ip4_hdr[1];
                         payload = (union payload_t *) &udp_h[1];
                         iteration_no = payload->uint64[0];
                         stats->udp[iteration_no]++;
@@ -173,22 +172,22 @@ static void pkt_classify(struct port_conf *port, struct configuration *config, s
                 break;
             }
 
-        case ETHER_TYPE_IPv6:
+        case RTE_ETHER_TYPE_IPV6:
             if(config->ipv4) {
                 ++stats->ipv6;
                 break;
             }
             else {
-                ip6_hdr = (struct ipv6_hdr *) &eth_hdr[1];
+                ip6_hdr = (struct rte_ipv6_hdr *) &eth_hdr[1];
                 if (ip6_hdr->proto == IPPROTO_ICMPV6) {
-                    icmphdr = (struct icmp_hdr *) ((char *)ip6_hdr + sizeof(struct ipv6_hdr));
+                    icmphdr = (struct rte_icmp_hdr *) ((char *)ip6_hdr + sizeof(struct rte_ipv6_hdr));
                     ++stats->icmp;
-                    process_icmp6(port, m);
+//                    process_icmp6(port, m);
                     break;
                 }
                 if (is_ip6_equal(ip6_hdr->src_addr, config->remote_ipaddr6.sin6_addr.s6_addr)) {
                     if (ip6_hdr->proto == IPPROTO_UDP) {
-                        udp_h = (struct udp_hdr *) &ip6_hdr[1];
+                        udp_h = (struct rte_udp_hdr *) &ip6_hdr[1];
                         payload = (union payload_t *) &udp_h[1];
                         iteration_no = payload->uint64[0];
                         stats->udp[iteration_no]++;
@@ -243,7 +242,7 @@ static inline int port_queue_init(struct port_queue_mapper *mapping)
 static inline int port_init(struct port_conf *port, struct port_queue_mapper **mapping, uint16_t queues) {
     uint16_t q;
     int retval;
-    if (port->port_id >= rte_eth_dev_count())
+    if (port->port_id >= rte_eth_dev_count_avail())
         return -1;
 
     /* Configure the Ethernet device. */
@@ -289,7 +288,7 @@ static inline int port_init(struct port_conf *port, struct port_queue_mapper **m
 static int
 lcore_main(void *port_mapping_void_type)
 {
-    const uint8_t nb_ports = rte_eth_dev_count();
+    const uint8_t nb_ports = rte_eth_dev_count_avail();
     const uint16_t nb_tx = 0;
     unsigned result_size;
     struct port_queue_mapper *mapping = (struct port_queue_mapper *)port_mapping_void_type;
@@ -335,7 +334,7 @@ lcore_main(void *port_mapping_void_type)
 /*
 Method to get next lcore id needed to run task.
 */
-int get_task_lcore_id(master_lcore_id)
+int get_task_lcore_id(int master_lcore_id)
 {
     int lcore_id;
     int socket_id = rte_socket_id();
@@ -380,7 +379,7 @@ main(int argc, char *argv[])
     signal(SIGTERM, signal_handler);
 
     /* Check that there is an even number of ports to send/receive on. */
-    if (rte_eth_dev_count() < 1)
+    if (rte_eth_dev_count_avail() < 1)
         rte_exit(EXIT_FAILURE, "Error: At least 1 ports is required.\n");
 
     mapping = malloc(conf->rx_queues * sizeof(struct port_queue_mapper *));

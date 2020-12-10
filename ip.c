@@ -83,7 +83,7 @@ void ipv6_addr_dump(const char *what, const struct in6_addr *ipv6_addr)
     fflush(stdout);
 }
 
-void ipv6_hdr_dump(const char *what, const struct ipv6_hdr *ipv6_addr)
+void ipv6_hdr_dump(const char *what, const struct rte_ipv6_hdr *ipv6_addr)
 {
     char src[40], dst[40];
     ipv6_to_str(ipv6_addr->src_addr, src);
@@ -95,18 +95,18 @@ void ipv6_hdr_dump(const char *what, const struct ipv6_hdr *ipv6_addr)
     fflush(stdout);
 }
 
-void ether_addr_dump(const char *what, const struct ether_addr *ea)
+void rte_ether_addr_dump(const char *what, const struct rte_ether_addr *ea)
 {
-    char buf[ETHER_ADDR_FMT_SIZE];
+    char buf[RTE_ETHER_ADDR_FMT_SIZE];
 
-    ether_format_addr(buf, ETHER_ADDR_FMT_SIZE, ea);
+    rte_ether_format_addr(buf, RTE_ETHER_ADDR_FMT_SIZE, ea);
     if (what)
         printf("%s", what);
     printf("%s", buf);
     fflush(stdout);
 }
 
-uint16_t ipv4_hdr_cksum(struct ipv4_hdr *ip_h)
+uint16_t ipv4_hdr_cksum(struct rte_ipv4_hdr *ip_h)
 {
     uint16_t *v16_h;
     uint32_t ip_cksum;
@@ -126,7 +126,7 @@ uint16_t ipv4_hdr_cksum(struct ipv4_hdr *ip_h)
     return (ip_cksum == 0) ? 0xFFFF : (uint16_t) ip_cksum;
 }
 
-uint16_t ipv6_pseudohdr_sum(const struct ipv6_hdr *ip6_hdr)
+uint16_t ipv6_pseudohdr_sum(const struct rte_ipv6_hdr *ip6_hdr)
 {
     uint32_t ip6_sum;
 
